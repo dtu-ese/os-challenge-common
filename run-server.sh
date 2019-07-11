@@ -2,7 +2,7 @@
 
 PORT=5003
 
-REPO_NAME=os-challenge
-REPO_ROOT=/home/vagrant/$REPO_NAME
+REPO_NAME=os-challenge               # Change this to your repo name
+REPO_ROOT=/home/vagrant/$REPO_NAME   # Change this to your repo path
 
 $REPO_ROOT/server $SERVER $PORT $SEED $TOTAL $START $END $REP_PROB_PERCENT $DELAY_US $PRIO_LAMBDA
