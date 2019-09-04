@@ -4,7 +4,7 @@ Vagrant.configure("2") do |config|
     server.vm.box = "ubuntu/trusty64"
     server.vm.provision :shell, path: "bootstrap.sh"
     server.vm.hostname = "server"
-    server.vm.network :private_network, ip: "192.168.0.10"
+    server.vm.network :private_network, ip: "192.168.101.10"
     server.vm.synced_folder "./", "/home/vagrant/os-challenge-common/"
     server.vm.provider :virtualbox do |v|
       v.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
@@ -18,7 +18,7 @@ Vagrant.configure("2") do |config|
     client.vm.box = "ubuntu/trusty64"
     client.vm.provision :shell, path: "bootstrap.sh"
     client.vm.hostname = "client"
-    client.vm.network :private_network, ip: "192.168.0.11"
+    client.vm.network :private_network, ip: "192.168.101.11"
     client.vm.synced_folder "./", "/home/vagrant/os-challenge-common/"
     client.vm.provider :virtualbox do |v|
       v.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
