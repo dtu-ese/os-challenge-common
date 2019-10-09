@@ -76,6 +76,7 @@ fi
 echo "Compiling..."
 find . -exec touch {} \;
 make clean 2> /dev/null
+find . -exec touch {} \;
 make
 
 echo "Starting server..."
