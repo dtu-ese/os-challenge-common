@@ -1,6 +1,12 @@
 #!/bin/sh
 #
-# Usage: ./run-server.sh <group-number>
+# Usage: ./run-server.sh <group-number> <optional-mode>
+#
+# If executed with no optional mode: it pulls, compiles and runs the latest commit.
+# If executed with optional mode -m: it pulls, compiles and runs the milestone
+# commit as specified in the 3rd argument in repositories.csv.
+# If executed with optional mode -f: it pulls, compiles and runs the final
+# commit as specified in the 4th arguement in repositories.csv.
 
 PORT=5003
 TOT_GROUPS=`cat repositories.csv | wc -l`

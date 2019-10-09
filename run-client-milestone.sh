@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# This is the configuration of the milestone run.
+# This is the configuration of the milestone test run.
 #
 
 SERVER=192.168.101.10
