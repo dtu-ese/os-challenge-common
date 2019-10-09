@@ -2,8 +2,8 @@
 #
 # Usage: ./run-server.sh <group-number>
 
-TOT_GROUPS=14
 PORT=5003
+TOT_GROUPS=`cat repositories.csv | wc -l`
 
 if ! [ $1 -eq $1 ] 2> /dev/null
 then
@@ -16,16 +16,17 @@ if [ $1 -lt 0 ]; then
   exit 1
 fi
 
-if [ $1 -gt $TOT_GROUPS ]; then
+if [ $1 -ge $TOT_GROUPS ]; then
   echo "Error. Usage: $0 <group-number>"
   exit 1
 fi
 
 GROUP_NO=$1
-REPO_NAME=`cat repositories.csv | head -n $GROUP_NO | tail -n 1 | cut -d, -f1`
-REPO_URL=`cat repositories.csv | head -n $GROUP_NO | tail -n 1 | cut -d, -f2`
-MILESTONE_COMMIT=`cat repositories.csv | head -n $GROUP_NO | tail -n 1 | cut -d, -f3`
-FINAL_COMMIT=`cat repositories.csv | head -n $GROUP_NO | tail -n 1 | cut -d, -f4`
+LINE=`expr $GROUP_NO + 1`
+REPO_NAME=`cat repositories.csv | head -n $LINE | tail -n 1 | cut -d, -f1`
+REPO_URL=`cat repositories.csv | head -n $LINE | tail -n 1 | cut -d, -f2`
+MILESTONE_COMMIT=`cat repositories.csv | head -n $LINE | tail -n 1 | cut -d, -f3`
+FINAL_COMMIT=`cat repositories.csv | head -n $LINE | tail -n 1 | cut -d, -f4`
 
 echo "Group Number: $GROUP_NO"
 echo "Repo Name: $REPO_NAME"
@@ -44,11 +45,15 @@ else
   cd $REPO_NAME
 fi
 
+COMMIT="HEAD"
 if [ $2 = "-m" ] 2> /dev/null
 then
   echo "Checking out milestone commit: $MILESTONE_COMMIT."
   COMMIT=$MILESTONE_COMMIT
-else
+fi
+
+if [ $2 = "-f" ] 2> /dev/null
+then
   echo "Checking out final commit: $FINAL_COMMIT."
   COMMIT=$FINAL_COMMIT
 fi
@@ -56,13 +61,16 @@ fi
 if [ $COMMIT = "0" ]; then
   echo "Commit not specified. Exiting..."
   exit 1
+elif [ $COMMIT = "HEAD" ]; then
+  echo "Proceeding with HEAD..."
 else
   git checkout $COMMIT
 fi
 
 echo "Compiling..."
+find . -exec touch {} \;
 make clean 2> /dev/null
-make all
+make
 
 echo "Starting server..."
 cd ..
