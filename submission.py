@@ -7,6 +7,9 @@ def gen_group():
 	print()
 
 	group = input("Group name: ")
+	if group.startswith('-') or ' ' in group:
+		print("Error: Group name must not start with '-' or contain a space ' '.")
+		exit(1)
 
 	pin = input("PIN (must be positive 6-digit integer): ")
 	if not re.match('^[0-9]+$', pin) or not len(pin)==6 or pin=='123456':
@@ -35,7 +38,7 @@ def gen_group():
 	print(out)
 
 	file = group + ".csv"
-	with open(file, 'w') as f:
+	with open(file, 'w', newline='\n') as f:
 		f.write(out + '\n')
 	
 	print()
@@ -66,7 +69,7 @@ def gen_submission(s):
 	print(out)
 
 	file = group + "-" + s + ".csv"
-	with open(file, 'w') as f:
+	with open(file, 'w', newline='\n') as f:
 		f.write(out + '\n')
 	
 	print()
