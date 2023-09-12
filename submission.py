@@ -16,7 +16,7 @@ def gen_group():
 		print("Error: PIN must be positive 6-digit integer. It cannot be 123456.")
 		exit(1)
 
-	repo = input ("Group Repository URL (e.g. https://github.com/XXXX/os-challenge-%s.git): " % group)
+	repo = input ("Group Repository URL (e.g. https://gitlab.gbar.dtu.dk/XXXX/os-challenge-%s.git): " % group)
 
 
 	num = input("Number of group members: ")
