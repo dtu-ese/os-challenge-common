@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-// #include <netdb.h>
 #include <netinet/in.h>
 #include <openssl/sha.h>
 #include "messages.h"
@@ -75,9 +74,9 @@ int main(int argc, char *argv[])
 void doprocessing(int sock)
 {
     int n;
-    unsigned char buffer[49]; // 32 (hash) + 8 (start) + 8 (end) + 1 (p)
-    bzero(buffer, 49);
-    n = read(sock, buffer, 49); // Read the full request packet
+    unsigned char buffer[PACKET_REQUEST_SIZE]; // 32 (hash) + 8 (start) + 8 (end) + 1 (p)
+    bzero(buffer, PACKET_REQUEST_SIZE);
+    n = read(sock, buffer, PACKET_REQUEST_SIZE); // Read the full request packet
 
     if (n < 0)
     {
@@ -87,7 +86,7 @@ void doprocessing(int sock)
 
     // Print the received hash in hexadecimal
     printf("Received hash:");
-    for (size_t i = 0; i < 32; i++)
+    for (size_t i = 0; i < PACKET_REQUEST_START_OFFSET; i++)
     {
         printf("%02x ", buffer[i]); // Print each byte of the hash
     }
@@ -95,52 +94,89 @@ void doprocessing(int sock)
 
     // Extract and print the 'start' value (next 8 bytes)
     uint64_t start;
-    memcpy(&start, buffer + 32, sizeof(start)); // Copy from buffer into start
-    start = be64toh(start);                     // Convert from big-endian to host byte order
+    memcpy(&start, buffer + PACKET_REQUEST_START_OFFSET, sizeof(start)); // Copy from buffer into start
+    start = be64toh(start);                                              // Convert from big-endian to host byte order
     printf("Start: %llu\n", (unsigned long long)start);
 
     // Extract and print the 'end' value (next 8 bytes)
     uint64_t end;
-    memcpy(&end, buffer + 32 + 8, sizeof(end)); // Copy from buffer into end
-    end = be64toh(end);                         // Convert from big-endian to host byte order
+    memcpy(&end, buffer + PACKET_REQUEST_END_OFFSET, sizeof(end)); // Copy from buffer into end
+    end = be64toh(end);                                            // Convert from big-endian to host byte order
     printf("End: %llu\n", (unsigned long long)end);
 
-        // Brute-force the number based on the received hash
-    uint64_t result = bruteForce(buffer, start, end);
+    uint64_t result = bruteForce(buffer, start, end); // runs bruteforce
+    uint64_t num_net = htobe64(result);               // Convert to network byte order
 
-    uint64_t num_net = htobe64(result); // Convert to network byte order
-
-    // Send the result back to the client
-    n = write(sock, &num_net, sizeof(num_net));
+    n = write(sock, &num_net, sizeof(num_net)); // Sends answer and assigns "coomand" value to n
+    // printf(".%i.", n);  // debugging check n
     if (n < 0)
     {
         perror("ERROR writing to socket");
         exit(1);
     }
 }
+// Structure to hold cached hash data
+typedef struct
+{
+    uint64_t number;
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+} HashCacheEntry;
 
-// Function to brute-force SHA256 hash and return the matching number
+HashCacheEntry cache[1000];
+int cache_size = 0;
+
+uint64_t find_cache(unsigned char target_hash[])
+{
+    for (size_t i = 0; i < cache_size; i++)
+    {
+        if (memcmp(cache[i].hash, target_hash, SHA256_DIGEST_LENGTH) == 0)
+        {
+            return cache[i].number;
+        }
+    }
+    return 0;
+}
+void add_cache(unsigned char target_hash[], uint64_t num)
+{
+    // Add the number and hash to the cache
+    cache[cache_size].number = num;
+    memcpy(cache[cache_size].hash, target_hash, SHA256_DIGEST_LENGTH);
+    cache_size++;
+
+    // Print the current contents of the cache
+    for (size_t i = 0; i < cache_size; i++)
+    {
+        printf("REAL NUMBER  %i Cache size %i Number: %llu, Hash: ", i, cache_size, cache[i].number);
+        for (size_t j = 0; j < SHA256_DIGEST_LENGTH; j++)
+        {
+            printf("%02x", cache[i].hash[j]); // Print the hash as a hexadecimal string
+        }
+        printf("\n");
+    }
+}
+
 uint64_t bruteForce(unsigned char target_hash[], uint64_t start, uint64_t end)
 {
-    uint64_t num = 0;
     unsigned char hash[SHA256_DIGEST_LENGTH];
 
-    // Try brute-forcing numbers from 0 upwards
-    for (num = start; num < end; num++)
-    // You can increase the range as needed
-    { // Hash the number
+    uint64_t a = find_cache(target_hash);
+    if (a > 0)
+    {
+        printf("\n\n\n\n\nMatch found for number: %llu in cache\n\n\n\n", a);
+        return a;
+    }
 
-        SHA256((unsigned char *)&num, sizeof(num), hash);
-
-        // Compare the generated hash with the target hash
-        if (memcmp(hash, target_hash, SHA256_DIGEST_LENGTH) == 0)
+    for (uint64_t num = start; num < end; num++) // try from start to end
+    {
+        SHA256((unsigned char *)&num, sizeof(num), hash);         // does SHA256 on num, and returns ít on hash
+        if (memcmp(hash, target_hash, SHA256_DIGEST_LENGTH) == 0) // checking if hash == target hash
         {
             printf("Match found for number: %llu\n", num);
+            add_cache(hash, num);
             return num;
         }
     }
 
-    // If no match is found, return -1
     printf("No match found.\n");
     return -1;
 }
