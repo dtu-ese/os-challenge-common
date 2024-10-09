@@ -1,14 +1,5 @@
-CC = gcc
-CFLAGS = -Wall -g
-LDFLAGS = -lssl -lcrypto
-TARGET = x86_64/bin/linux/server
-SRC = program/server.c
-
-all: $(TARGET)
-
-$(TARGET): $(SRC)
-	$(CC) $(CFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS)
+default:
+	gcc -O3 -o server server.c -lcrypto -pthread
 
 clean:
-	rm -f $(TARGET)
-
+	rm -f server
