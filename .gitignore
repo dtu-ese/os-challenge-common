@@ -10,3 +10,5 @@ run-client-milestone.sh
 server.sh
 server.sh
 run-reference-server.sh
+arm64/bin/macos/client
+server
