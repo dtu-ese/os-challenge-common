@@ -1,2 +1,14 @@
 .vagrant
 .DS_Store
+bootstrap.sh
+client.sh
+get-bin-path.sh
+Makefile
+run-client-final.sh
+run-client.sh
+run-client-milestone.sh
+server.sh
+server.sh
+run-reference-server.sh
+arm64/bin/macos/client
+server
