@@ -11,43 +11,27 @@
 
 // NOTE: Used https://www.tutorialspoint.com/unix_sockets/client_server_model.htm to understand and build our socket logic
 
+
 // Global socket variables to be used by handler.
 int server_fd;
 int client_socket;
 
-// CTRL+C termination / interrupt handler
+// CTRL+C termination / interrupt handler 
 void terminationHandler(int sig) {
     close(server_fd);
     close(client_socket);
     exit(0);
 }
 
-// Brute-force search function
-uint64_t bruteForceSearch(uint8_t* hash, uint64_t start, uint64_t end) {
-    uint8_t calculatedHash[32];
-    uint64_t key;
-    for (uint64_t i = start; i < end; i++) {
-        SHA256_CTX sha256;
-        SHA256_Init(&sha256);
-        SHA256_Update(&sha256, &i, 8);
-        SHA256_Final(calculatedHash, &sha256);
-        if (memcmp(hash, calculatedHash, 32) == 0) {
-            key = i;
-            break;
-        }
-    }
-    return key;
-}
-
 int main(int argc, char *argv[]) {
 
-    // Initialize termination signal
+    // Initialize termination signal 
     signal(SIGINT, terminationHandler);
 
     // Create socket
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
-    // Make sure the port is available
+    // Make sure the port is available 
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0) {
         perror("setsockopt(SO_REUSEADDR) failed");
         exit(1);
@@ -116,8 +100,19 @@ int main(int argc, char *argv[]) {
             start = htobe64(start);
             end = htobe64(end);
 
-            // Perform Brute-force search
-            uint64_t key = bruteForceSearch(hash, start, end);
+            // Search for key in given range corresponding to given hash
+            uint8_t calculatedHash[32];
+            uint64_t key;
+            for (uint64_t i = start; i < end; i++) {
+                SHA256_CTX sha256;
+                SHA256_Init(&sha256);
+                SHA256_Update(&sha256, &i, 8);
+                SHA256_Final(calculatedHash, &sha256);
+                if (memcmp(hash, calculatedHash, 32) == 0) {
+                    key = i;
+                    break;
+                }
+            }
 
             // Send back found key to client
             key = be64toh(key);

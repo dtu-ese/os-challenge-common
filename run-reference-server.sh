@@ -1,6 +1,6 @@
 #!/bin/sh
 
-PATHTOCOMMON=/home/vagrant/os-challenge-common
+PATHTOCOMMON=~/operating/byteforce/os-challenge-ByteForce/
 PORT=5003
 
 $PATHTOCOMMON/$(./get-bin-path.sh)/server $PORT
