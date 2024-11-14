@@ -1,88 +1,88 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <openssl/sha.h>
 #include <signal.h>
+#include <unistd.h>
+#include "messages.h"
 
-#include "code/messages.h"
-
-// NOTE: Used https://www.tutorialspoint.com/unix_sockets/client_server_model.htm to understand and build our socket logic
+// NOTE: Some socket logic taken from https://www.tutorialspoint.com/unix_sockets/index.htm
 
 
-// Global socket variables to be used by handler.
-int server_fd;
-int client_socket;
+// Socket variables are global so that they can be closed by handler.
+int sockfd;
+int newsockfd;
 
-// CTRL+C termination / interrupt handler 
+// CTRL+C interrupt handler for graceful termination
 void terminationHandler(int sig) {
-    close(server_fd);
-    close(client_socket);
+    close(sockfd);
+    close(newsockfd);
     exit(0);
 }
 
 int main(int argc, char *argv[]) {
 
-    // Initialize termination signal 
+    // Set up signal for graceful termination
     signal(SIGINT, terminationHandler);
 
     // Create socket
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
-    // Make sure the port is available 
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0) {
+    // Setting the port available in case it is not
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0) {
         perror("setsockopt(SO_REUSEADDR) failed");
         exit(1);
     }
 
-    // Initialize socket structure and bind the socket to the port
+    // Initialize socket structure
     struct sockaddr_in serv_addr;
     bzero((char *)&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(atoi(argv[1]));
 
-    if (bind(server_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        perror("bind failed");
+    // Bind to host address
+    if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
+        perror("ERROR on binding");
         exit(1);
     }
 
     // Listen for client
-    listen(server_fd, 100);
+    listen(sockfd, 100);
 
     // Declare client address and size
     struct sockaddr_in cli_addr;
-    int cli_lengt = sizeof(cli_addr);
+    int clilen = sizeof(cli_addr);
 
-    // Accept client connections as concurrent child processes
+    // Begin accepting client connections as concurrent child processes
     while (1) {
 
-        // Accept and check for error
-        client_socket = accept(server_fd, (struct sockaddr *) &cli_addr, &cli_lengt);
-        if (client_socket < 0) {
-            perror("Accept failed");
+        // Accept connection and check for error
+        newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+        if (newsockfd < 0) {
+            perror("ERROR on accept");
             exit(1);
         }
 
         // Fork off a child process and check for error
         int pid = fork();
         if (pid < 0) {
-            perror("Fork failed");
+            perror("ERROR on fork");
             exit(1);
         }
 
-        // Child process
+        // Child: process a request and return a result
         if (pid == 0) {
 
             // Close the original socket on this process
-            close(server_fd);
+            close(sockfd);
 
-            // Read in request through client socket
+            // Read in request through new socket
             char buffer[PACKET_REQUEST_SIZE];
             bzero(buffer, PACKET_REQUEST_SIZE);
-            read(client_socket, buffer, PACKET_REQUEST_SIZE);
+            read(newsockfd, buffer, PACKET_REQUEST_SIZE);
 
             // Declare request components
             uint8_t hash[32];
@@ -96,6 +96,9 @@ int main(int argc, char *argv[]) {
             memcpy(&end, buffer + PACKET_REQUEST_END_OFFSET, 8);
             memcpy(&p, buffer + PACKET_REQUEST_PRIO_OFFSET, 1);
 
+            // Set process priority
+            nice(16 - p);
+
             // Convert byte order as needed
             start = htobe64(start);
             end = htobe64(end);
@@ -103,29 +106,24 @@ int main(int argc, char *argv[]) {
             // Search for key in given range corresponding to given hash
             uint8_t calculatedHash[32];
             uint64_t key;
-            for (uint64_t i = start; i < end; i++) {
-                SHA256_CTX sha256;
-                SHA256_Init(&sha256);
-                SHA256_Update(&sha256, &i, 8);
-                SHA256_Final(calculatedHash, &sha256);
-                if (memcmp(hash, calculatedHash, 32) == 0) {
-                    key = i;
+            for (key = start; key < end; key++) {
+                SHA256((uint8_t *)&key, 8, calculatedHash);
+                if (memcmp(hash, calculatedHash, 32) == 0)
                     break;
-                }
             }
 
-            // Send back found key to client
+            // Send resulting key back to client
             key = be64toh(key);
-            write(client_socket, &key, 8);
+            write(newsockfd, &key, 8);
 
-            // Close the child process
-            close(client_socket);
+            // Clean up and exit the child process
+            close(newsockfd);
             exit(0);
         }
 
-        // Close client socket and begin loop again
+        // Parent: close the new socket, then begin loop again
         else {
-            close(client_socket);
+            close(newsockfd);
         }
     }
 

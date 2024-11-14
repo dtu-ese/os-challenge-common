@@ -10,6 +10,8 @@
 #include "code/cache.h"
 #include "code/priorityQ.h"
 
+
+
 // Semaphore to track the number of requests in the queue
 sem_t requests_in_queue;
 // Mutex to protect shared resources
@@ -19,16 +21,8 @@ pthread_mutex_t lock;
 cache_t cache;
 priorityQ_t pq;
 
-// Structure for the thread pool
-typedef struct {
-    pthread_t* threads; // Array of worker threads
-    int thread_count;    // Number of threads in the pool
-    int stop;           // Flag to stop the threads
-} thread_pool_t;
-
 // Worker thread function to process requests
-void* worker_thread(void* arg) {
-    thread_pool_t* pool = (thread_pool_t*)arg;
+void* worker_thread() {
     while (1) {
         // Wait for a request to be available in the queue
         sem_wait(&requests_in_queue);
@@ -60,35 +54,8 @@ void* worker_thread(void* arg) {
     }
 }
 
-// Initialize the thread pool
-void init_thread_pool(thread_pool_t* pool, int thread_count) {
-    pool->thread_count = thread_count;
-    pool->stop = 0;
-    pool->threads = malloc(sizeof(pthread_t) * thread_count);
-    for (int i = 0; i < thread_count; i++) {
-        pthread_create(&pool->threads[i], NULL, worker_thread, pool);
-    }
-}
-
-// Clean up the thread pool
-void destroy_thread_pool(thread_pool_t* pool) {
-    pool->stop = 1;
-    for (int i = 0; i < pool->thread_count; i++) {
-        sem_post(&requests_in_queue); // Wake up threads to exit
-    }
-    for (int i = 0; i < pool->thread_count; i++) {
-        pthread_join(pool->threads[i], NULL);
-    }
-    free(pool->threads);
-}
-
 // Start server
 int main(int argc, char *argv[]) {
-    // Check for the correct number of arguments
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-        exit(1);
-    }
 
     // Initialize Mutex
     pthread_mutex_init(&lock, NULL);
@@ -126,15 +93,17 @@ int main(int argc, char *argv[]) {
     struct sockaddr_in cli_addr;
     int clilen = sizeof(cli_addr);
 
-    // Create thread pool
-    thread_pool_t pool;
-    init_thread_pool(&pool, 4); // Initialize with 4 threads
+    // Create worker threads to handle requests
+    pthread_t threads[4];
+    for (int i = 0; i < 4; i++)
+        pthread_create(&threads[i], NULL, worker_thread, NULL);
 
     // Counter to track the number of requests
     int requestCounter = 0;
 
     // Main loop to accept incoming connections
     while (1) {
+
         // Accept a new client connection and check for error
         int newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
         if (newsockfd < 0) {
@@ -188,9 +157,4 @@ int main(int argc, char *argv[]) {
         // Signal that a new request is available for processing
         sem_post(&requests_in_queue);
     }
-
-    // Clean up
-    destroy_thread_pool(&pool);
-    close(sockfd);
-    return 0;
 }
