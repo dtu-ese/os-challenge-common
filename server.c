@@ -128,7 +128,7 @@ int main(int argc, char *argv[]) {
 
     // Create thread pool
     thread_pool_t pool;
-    init_thread_pool(&pool, 4); // Initialize with 4 threads
+    init_thread_pool(&pool, 7); // Initialize with 7 threads
 
     // Counter to track the number of requests
     int requestCounter = 0;
