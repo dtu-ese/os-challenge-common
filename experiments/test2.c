@@ -1,82 +1,30 @@
-// NOTE: We used some socket logic from https://www.tutorialspoint.com/unix_sockets/index.htm
-
-#include <netdb.h>
-#include <netinet/in.h>
-#include <openssl/sha.h>
-#include <pthread.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "messages.h"
+#include <netdb.h>
+#include <netinet/in.h>
+#include <openssl/sha.h>
+#include <signal.h>
+#include <pthread.h>
 
-#define SIZE 100
+#include "code/messages.h"
+#include "cache_array.h" // Include the cache header
 
-// Array inspired in https://www.tutorialspoint.com/data_structures_algorithms/hash_table_program_in_c.htm
+// NOTE: Used https://www.tutorialspoint.com/unix_sockets/client_server_model.htm to understand and build our socket logic
 
-//Just a variable that saves the place in use in the array.
-int place = 1;
-
-// Create structs for Table and items
-struct DataItem {
-   uint8_t data[32];   
-   uint64_t key;
-};
-
-// Define Array and Item
-struct DataItem* BigArray[SIZE]; 
-struct DataItem* item;
-
-void insert(uint64_t key, uint8_t* data) {
-
-    // Create an item in the heap and save the values.
-    struct DataItem *item = (struct DataItem*) malloc(sizeof(struct DataItem));
-    memcpy(item->data, data , 32);
-    item->key = key;
-
-    //Initialize  an index
-    int dataIndex = 1;
-
-    //Move in array until an empty or end of the array //Instead we can create a variable that counts the index of the aray
-    while(BigArray[dataIndex] != NULL && dataIndex != SIZE) {
-
-       //Go to next cell
-       ++dataIndex;	
-
-    }
-	
-    BigArray[dataIndex] = item;
-    ++place;	// Index of the array?
-}
-
-struct DataItem *search(uint8_t* data) {
-    printf("Entra \n");
-    //move in array
-    for (int index = 1; index < place; index++) {
-        // If find a match return the value    
-        if (memcmp(BigArray[index]->data, data, 32) == 0){
-            printf("LO ENCONTRO \n");
-            return BigArray[index];
-        }
-    }
-          
-    return NULL;        
-}
-
-
-// Takes in pointer to int newsockfd on the heap
+// Function to handle the reverse hashing process
 void* reverseHash(void *newsockfdPtr) {
 
-    // Get newsockfd and deallocate it from the heap
+    // Retrieve the socket file descriptor from the pointer
     int newsockfd = *(int*)newsockfdPtr;
-    free(newsockfdPtr);
+    free(newsockfdPtr); // Free the allocated memory for the socket pointer
 
-    // Read in request through new socket
+    // Buffer to hold the incoming request
     uint8_t buffer[PACKET_REQUEST_SIZE];
-    read(newsockfd, buffer, PACKET_REQUEST_SIZE);
+    read(newsockfd, buffer, PACKET_REQUEST_SIZE); // Read the request from the client
 
-    // Extract components from request
+    // Variables to hold the extracted request data
     uint8_t hash[32];
     uint64_t start;
     uint64_t end;
@@ -90,64 +38,66 @@ void* reverseHash(void *newsockfdPtr) {
     start = htobe64(start);
     end = htobe64(end);
 
-    // Search for key in given range corresponding to given hash
-
-    
-    uint8_t calculatedHash[32];
-    uint64_t key;
-    for (key = start; key < end; key++) {
-        SHA256((uint8_t *)&key, 8, calculatedHash);
-
-        if (memcmp(hash, calculatedHash, 32) == 0)
-            break;
+    // Initialize the cache (this should be done once in the main function)
+    static cache_t cache;
+    static int cache_initialized = 0;
+    if (!cache_initialized) {
+        init_cache(&cache); // Initialize the cache
+        cache_initialized = 1; // Set the flag to indicate cache is initialized
     }
-    struct DataItem* value = search(hash);
-    // Insert the new item in the array
-    insert(key, calculatedHash);
-    
-    for (int i = 1; i < place ; i++) {
-        printf("N %d es el %d ", i, BigArray[i]->key);
 
-        for (int g = 0; g < 32; g++){
-            printf("%02x", BigArray[i]->data[g]);
-            
-
-            
-        
+    // Check if the result is already in the cache
+    pair_t *cache_result = cache_search(&cache, hash);
+    if (cache_result) {
+        // If found in cache, send the key back to the client
+        uint64_t key = cache_result->key;
+        key = be64toh(key); // Convert key to network byte order
+        write(newsockfd, &key, 8);
+    } else {
+        // If not found in cache, calculate the hash
+        uint8_t calculatedHash[32];
+        uint64_t key;
+        for (key = start; key < end; key++) {
+            SHA256((uint8_t *)&key, 8, calculatedHash);
+            if (memcmp(hash, calculatedHash, 32) == 0)
+                break; // Found the matching hash
         }
-        printf("\n");
-       
-    }
-    printf("EL ULTIMO ");
-    for (int h = 0; h < 32; h++){
-            
-            printf("%02x", calculatedHash[h]);          
-        
-    }
-    printf("\n");
 
-    // Send resulting key back to client
-    key = be64toh(key);
-    write(newsockfd, &key, 8);
+        // Convert the key to network byte order and send it back to the client
+        key = be64toh(key);
+        write(newsockfd, &key, 8);
 
-    // Close socket and exit
+        // Insert the calculated hash and key into the cache
+        cache_insert(&cache, calculatedHash, key);
+    }
+
+    // Close the socket connection
     close(newsockfd);
-    pthread_exit(NULL);
+    pthread_exit(NULL); // Exit the thread
 }
 
-// Start server
+// Main function to start the server
 int main(int argc, char *argv[]) {
+    // Check for the correct number of arguments
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+        exit(1);
+    }
 
-    // Create socket
+    // Create a socket
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        perror("ERROR opening socket");
+        exit(1);
+    }
 
-    // Set the port as available in case it is not available, and check for error
+    // Set socket options to reuse the address
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int)) < 0) {
         perror("setsockopt(SO_REUSEADDR) failed");
         exit(1);
     }
 
-    // Initialize socket structure
+    // Initialize socket structure and bind the socket to the port
     struct sockaddr_in serv_addr;
     bzero((char *)&serv_addr, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
@@ -160,31 +110,32 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
-    // Listen for client
+    // Listen for client connections
     listen(sockfd, 100);
 
-    // Prepare client address and size
+    // Declare client address and size
     struct sockaddr_in cli_addr;
     int clilen = sizeof(cli_addr);
 
-    // Accept client connections and assign each request to a thread
+    // Main loop to accept incoming connections
     while (1) {
-
-        // Accept connection, and check for error
+        // Accept a new client connection and check for error
         int newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
         if (newsockfd < 0) {
             perror("ERROR on accept");
             exit(1);
         }
-        // Temporarily place newsockfd on the heap
+
+        // Allocate memory for the socket file descriptor
         int *newsockfdPtr = malloc(sizeof(int));
-        memcpy(newsockfdPtr, &newsockfd, sizeof(int));
+        memcpy(newsockfdPtr, &newsockfd, sizeof(int)); // Copy the socket file descriptor
 
-        // Create thread to calculate and return response to client
+        // Create a new thread to handle the request
         pthread_t tid;
-        pthread_create(&tid, NULL, reverseHash, newsockfdPtr);
-
-       
+        pthread_create(&tid, NULL, reverseHash, newsockfdPtr); // Start the reverseHash function in a new thread
     }
-    
+
+    // Close the server socket (this line will never be reached in the current infinite loop)
+    close(sockfd);
+    return 0; // Return success
 }

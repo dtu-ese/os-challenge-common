@@ -1,5 +1,3 @@
-// NOTE: We used some socket logic from https://www.tutorialspoint.com/unix_sockets/index.htm
-
 #include <netdb.h>
 #include <netinet/in.h>
 #include <openssl/sha.h>
@@ -10,8 +8,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include "messages.h"
-#include "priorityQ.h"
+
+#include "code/messages.h"
+#include "code/priorityQ.h"
+
+// NOTE: Used https://www.tutorialspoint.com/unix_sockets/client_server_model.htm to understand and build our socket logic
 
 // Declare semaphore and mutex
 sem_t requests_in_queue;
