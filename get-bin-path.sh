@@ -14,4 +14,3 @@ if [ "$OS" = "Darwin" ]; then
 fi
 
 echo "$ARCH/bin/$OS"
-
