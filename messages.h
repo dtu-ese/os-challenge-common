@@ -12,7 +12,9 @@
   #define le64toh(x) OSSwapLittleToHostInt64(x)
 #endif
 
-#include <openssl/sha.h>
+#ifndef SHA256_DIGEST_LENGTH
+#define SHA256_DIGEST_LENGTH 32
+#endif
 
 #define PACKET_REQUEST_SIZE           (SHA256_DIGEST_LENGTH + 8 + 8 + 1)
 #define PACKET_REQUEST_HASH_OFFSET    0
